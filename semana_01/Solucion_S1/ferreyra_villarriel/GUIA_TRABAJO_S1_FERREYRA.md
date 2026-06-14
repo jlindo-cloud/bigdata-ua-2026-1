@@ -310,7 +310,7 @@ _Respuesta_:
 
 Dibuja (a mano o usando draw.io) una arquitectura inicial **muy básica** de cómo crees que debería funcionar tu proyecto. Incluye: fuentes de datos, almacenamiento, procesamiento y visualización.
 
-_(Adjunta la imagen o el link de draw.io)_
+ [Imagen Semana 01 Draw.io](https://drive.google.com/file/d/1VjvSks_yewYmNXeJAYyU49_UPiyJJnpB/view?usp=drive_link)
 
 _Link o descripción de tu diagrama_:
 
