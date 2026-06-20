@@ -577,7 +577,7 @@ docs: actualizar README con instrucciones    ← documentación
 semana-01-lopez-maria          ← actividad individual semana 1
 semana-02-garcia-pedro         ← actividad individual semana 2
 feature/modelo-ml-torres       ← funcionalidad del proyecto grupal
-fix/error-conexion-mongodb     ← corrección en el proyecto
+fix/error-conexion-mongodb     ← corrección en el proyect![alt text](image.png)o
 ```
 
 ---
