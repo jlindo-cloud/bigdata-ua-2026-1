@@ -849,19 +849,6 @@ RIESGOS:
 
 ---
 
-## GUION VERBAL SUGERIDO {#guion}
-
-**Al iniciar la clase:**
-> *"Hoy tienen dos grandes aprendizajes. El primero es histórico: cómo la industria evolucionó Hadoop para hacerlo útil más allá de Java MapReduce. El segundo es práctico: van a implementar su primera base de datos MongoDB, que es la tecnología NoSQL más contratada en LinkedIn Perú según búsquedas de empleo Data Engineer 2025."*
-
-**Al explicar el CAP Theorem:**
-> *"El CAP Theorem suena teórico pero es una decisión de arquitectura que cambia todo. ¿Prefiero que mis datos sean siempre correctos o siempre disponibles? No pueden tener los dos en un sistema distribuido. Los bancos eligen correcto. Las redes sociales eligen disponible."*
-
-**Al mostrar MongoDB:**
-> *"MongoDB no tiene tablas. No tiene columnas fijas. No tiene esquemas. Esto suena a caos — ¿cómo organizas algo sin estructura? La respuesta: cada documento lleva su propia estructura. Es como la diferencia entre un formulario impreso con campos fijos y una hoja en blanco. El formulario es SQL. La hoja en blanco es MongoDB."*
-
-**Al cerrar:**
-> *"Hoy diseñaron arquitecturas que empresas como Claro, BCP y SUNAT están implementando ahora mismo. La diferencia entre ustedes y un ingeniero de 5 años de experiencia no es el conocimiento — es que él lo hizo 1,000 veces en producción. El laboratorio de casa es donde empiezan a contar esas repeticiones."*
 
 ---
 
