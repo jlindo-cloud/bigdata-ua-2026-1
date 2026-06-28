@@ -1,4 +1,8 @@
 ---
+https://github.com/quispecrima12-byte/ExParcial-Yape-QuispeCristian.git
+
+
+
 **UNIVERSIDAD AUTÓNOMA DEL PERÚ**
 **FACULTAD DE INGENIERÍA Y ARQUITECTURA**
 **ESCUELA PROFESIONAL DE INGENIERÍA DE SISTEMAS COMPUTACIONALES**
@@ -10,10 +14,10 @@
 
 ---
 
-| **CÓDIGO DEL ESTUDIANTE:** | | **NÚMERO DE CLASE:** | |
+| **CÓDIGO DEL ESTUDIANTE:2221896051 | | **NÚMERO DE CLASE:** | |
 |---|---|---|---|
-| **APELLIDOS Y NOMBRES:** | | **FECHA ENTREGA:** | |
-| **DOCENTE:** | **Mg. Rubén Quispe Llacctarimay** | **Modalidad:** | **Implementación + Video** |
+| **APELLIDOS Y NOMBRES:Quispe Poma Cristian Alfredo** | | **FECHA ENTREGA:27/06/2026** | |
+| **DOCENTE:** | **Mg. Rubén Quispe Llacctarimay** | **Modalidad: Presencual** | **Implementación + Video** |
 
 ---
 
@@ -73,6 +77,41 @@ Diseña la arquitectura completa de datos para Yape. Para cada componente del si
 | Red de detección de fraude (ciclo A→B→C→A en < 5 min) | | | |
 | Dashboard ejecutivo (top 10 distritos, actualización diaria) | | | |
 
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           USUARIOS YAPE (15M)                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          API GATEWAY / LOAD BALANCER                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌───────────────┐         ┌───────────────┐         ┌───────────────┐
+│    Redis      │         │  CockroachDB  │         │   MongoDB     │
+│  Sesiones     │         │  Core Pagos   │         │  Comerciantes │
+│  (TTL 30 min) │         │  (ACID + CP)  │         │  (Schema-free)│
+└───────────────┘         └───────────────┘         └───────────────┘
+        │                           │                           │
+        └───────────────────────────┼───────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         STREAMING / EVENT BUS                             │
+│                    (Kafka / RabbitMQ / Pub/Sub)                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌───────────────┐         ┌───────────────┐         ┌───────────────┐
+│   Neo4j       │         │   BigQuery    │         │  PostgreSQL   │
+│  Fraude       │         │  Historial    │         │   Dashboard   │
+│  (Grafos)     │         │  (18 TB/año)  │         │   (Metabase)  │
+└───────────────┘         └───────────────┘         └───────────────┘
+
 ---
 
 **1.2 (1 pt) — Teorema CAP:**
@@ -84,6 +123,43 @@ Para los siguientes 2 componentes de Yape, indica la combinación CAP correcta (
 | Core de pagos (débito/crédito de saldos) | | | |
 | Historial "mis últimas 50 transacciones" | | | |
 
+Componente	Combinación CAP	Propiedad sacrificada	¿Por qué ese sacrificio es correcto o incorrecto para este caso?
+Core de pagos (CP)
+¿Qué combinación usa? → CP (Consistencia + Tolerancia a Particiones)
+
+¿Qué sacrifica? → Disponibilidad (A)
+
+¿Por qué es correcto?
+
+Imagina que estás pagando S/ 50 en un restaurante con Yape. Tu saldo actual es S/ 200.
+
+La app consulta tu saldo desde un nodo.
+
+Pero hay un problema de red y ese nodo no puede comunicarse con los demás.
+
+Si el sistema priorizara disponibilidad (AP), te dejaría pagar aunque no pueda verificar tu saldo real. Podrías tener S/ 0 en otro nodo y generar un descubierto.
+
+En cambio, como es CP, el sistema prefiere rechazar la operación (sacrifica disponibilidad) antes que permitir un débito incorrecto.
+
+Decisión correcta: En finanzas, la consistencia es sagrada. Un error de S/ 1 puede multiplicarse por millones de transacciones. Es mejor que el usuario intente de nuevo en unos segundos a que pierda dinero.
+
+Historial de transacciones (AP)
+¿Qué combinación usa? → AP (Disponibilidad + Tolerancia a Particiones)
+
+¿Qué sacrifica? → Consistencia (C)
+
+¿Por qué es correcto?
+
+El usuario abre Yape para ver sus últimas 50 movimientos.
+
+Hay un problema de red entre nodos que almacenan el historial.
+
+Si el sistema fuera CP, se quedaría cargando sin mostrar nada hasta que se resuelva el problema.
+
+Al ser AP, cada nodo responde con los datos que tiene disponibles, aunque estén desactualizados por unos segundos.
+
+Decisión correcta: El usuario quiere ver su historial ahora. Que la transacción de hace 1 minuto no aparezca aún es aceptable (eventualmente aparecerá). La experiencia de usuario mejora porque la app responde rápido.
+
 ---
 
 **1.3 (1 pt) — NewSQL:**
@@ -91,11 +167,57 @@ Para los siguientes 2 componentes de Yape, indica la combinación CAP correcta (
 El equipo de Yape evalúa migrar el core de pagos a **CockroachDB** (NewSQL). Responde:
 
 a) ¿Qué limitación de Oracle resuelve CockroachDB al escalar de 15M a 50M usuarios?
+Oracle, en su modelo tradicional de base de datos centralizada (o con RAC limitado), escala verticalmente (más CPU, RAM, discos) o con particionamiento manual complejo (sharding). Al llegar a 50M de usuarios, Yape enfrentaría:
+
+Cuellos de botella en escritura (todas las transacciones van a un nodo primario).
+
+Replicación síncrona lenta entre regiones.
+
+Sharding manual con rebalanceo complicado y con downtime.
+
+CockroachDB resuelve esto con:
+
+Escalabilidad horizontal automática: añade nodos y la base de datos redistribuye datos en rangos (basados en la clave primaria) sin intervención manual.
+
+Replicación síncrona multi-región con consistencia fuerte (via protocolo Raft).
+
+Balanceo automático: los rangos se mueven entre nodos según carga y almacenamiento, sin downtime para la aplicación.
+
+Esto permite pasar de 15M a 50M usuarios simplemente agregando más nodos, sin rediseñar la capa de datos ni hacer particionamiento lógico en la app.
 
 b) ¿Por qué MongoDB NO puede reemplazar a Oracle para el procesamiento de pagos aunque también escala horizontalmente?
+MongoDB escala horizontalmente mediante sharding (particiona colecciones entre nodos), pero tiene limitaciones críticas para pagos:
+
+Consistencia eventual por defecto: en configuraciones de réplica, los reads pueden ir a secundarios y leer datos no confirmados (aunque se puede forzar lectura en primario, penaliza rendimiento).
+
+Transacciones multi-documento limitadas: hasta versiones recientes soporta transacciones ACID, pero:
+
+Son más lentas y con menor aislamiento que en bases relacionales.
+
+No tienen la madurez para manejar alto volumen de operaciones concurrentes con bloqueos finos.
+
+Sin consistencia fuerte global: en sharding, una transacción que afecta a varios shards requiere un coordinador de transacciones (2PC) que puede fallar y dejar estados inconsistentes si no se maneja bien.
+
+Modelo de datos flexible (schema-less): permite inconsistencias de esquema, riesgo alto en transacciones financieras donde la integridad referencial es crítica.
+
+Auditoría y cumplimiento: Oracle tiene herramientas maduras de auditoría, cifrado, y cumplimiento (PCI-DSS) que MongoDB no iguala.
 
 c) ¿Qué mecanismo técnico usa CockroachDB para mantener ACID en múltiples nodos distribuidos? (1 término técnico es suficiente)
+Protocolo Raft (consenso distribuido) + MVCC (Multi-Version Concurrency Control) + 2PC (Two-Phase Commit) distribuido.
 
+Pero si solo das 1 término técnico, el más característico es:
+
+Protocolo Raft
+
+Explicación breve:
+
+Cada rango de datos tiene su propio grupo Raft (réplica líder-seguidores).
+
+El líder coordina escrituras con replicación síncrona a la mayoría de nodos (consenso).
+
+Las transacciones distribuidas que tocan varios rangos usan un coordinador de transacciones que orquesta un 2PC optimizado (con resolución de conflictos por MVCC y timestamp de HLC — Hybrid Logical Clock).
+
+Esto asegura atomicidad, consistencia, aislamiento (nivel serializable por defecto) y durabilidad incluso si fallan nodos.
 ---
 
 ## PARTE B — DATABRICKS COMMUNITY EDITION (6 puntos)
@@ -626,15 +748,116 @@ Responde en el espacio de abajo (3-5 líneas):
 
 ```
 a) ¿Cuándo usarías MongoDB en Docker en lugar de MongoDB Atlas para el equipo de Yape?
+Usarías MongoDB en Docker en los siguientes escenarios:
 
+1. Desarrollo local y pruebas unitarias
+
+Cada developer tiene su instancia aislada en su máquina.
+
+No depende de internet ni de credenciales de Atlas.
+
+Puedes resetear la BD rápidamente con docker rm y levantar de nuevo.
+
+2. Integración continua (CI/CD)
+
+En pipelines de GitHub Actions, GitLab CI, etc., levantar un contenedor MongoDB efímero para correr tests sin costo y sin latencia de red.
+
+Se destruye al finalizar el pipeline.
+
+3. Pruebas de rendimiento locales
+
+Simular cargas sin afectar el entorno de pruebas compartido en Atlas.
+
+Ajustar configuraciones (cache, engine, etc.) sin riesgo.
+
+4. Entornos offline o con restricciones de red
+Si el equipo trabaja en zonas sin internet estable.
+
+Cumplimiento de datos que requieren que la BD esté on-premise.
+
+5. Costo en entornos no productivos
+
+Para ambientes de desarrollo y QA donde no necesitas alta disponibilidad ni backups automáticos, Docker es gratuito.
 
 
 b) ¿Qué ventaja tiene Atlas M0 sobre el contenedor Docker para el contexto universitario?
+El contexto universitario (estudiantes aprendiendo MongoDB) hace que Atlas M0 (cluster gratuito) sea superior a Docker por:
 
+1. Cero configuración local
+
+No necesitan instalar Docker ni tener recursos en su máquina.
+
+Solo un navegador y una cuenta (Google/GitHub).
+
+2. Acceso desde cualquier dispositivo
+
+Pueden conectarse desde la universidad, casa, o teléfono.
+
+No dependen de su disco duro ni de que Docker esté funcionando.
+
+3. Interfaz web integrada (MongoDB Compass en el navegador)
+
+Pueden explorar, consultar y visualizar datos sin instalar herramientas.
+
+Perfecto para quienes empiezan y no saben usar CLI.
+
+4. Compartición y colaboración
+
+Un equipo de estudiantes puede compartir la misma URI de conexión.
+
+Trabajan sobre los mismos datos sincronizados.
+
+5. Persistencia y continuidad
+
+Los datos no se pierden al apagar la máquina.
+Pueden retomar el proyecto días después sin perder avances.
+
+6. No requieren conocimientos de administración
+
+Atlas maneja parches de seguridad, actualizaciones, y monitoreo básico.
+
+En Docker, deben exponer puertos, manejar volúmenes, y solucionar problemas de red.
+
+7. Incluye alertas y métricas
+
+Atlas M0 muestra panel de rendimiento (operaciones por segundo, tamaño, índices).
+
+En Docker local necesitarían instalar herramientas extra (Prometheus, Grafana).
+
+8. Es gratis y suficiente para proyectos universitarios
+
+512 MB de almacenamiento y hasta 100 conexiones simultáneas son más que suficientes para trabajos académicos.
 
 
 c) ¿Qué sucede con los datos del contenedor Docker si ejecutas `docker stop yape-mongo-local` y 
    luego `docker rm yape-mongo-local`? ¿Y con los datos de Atlas?
+En Docker:
+Cuando ejecutas docker stop yape-mongo-local, el contenedor se detiene de forma ordenada (envía señal SIGTERM a MongoDB para que cierre conexiones y archive datos correctamente). En este punto, los datos permanecen intactos dentro del sistema de archivos del contenedor, específicamente en el directorio /data/db donde MongoDB almacena sus archivos de datos. El contenedor deja de ejecutarse pero su capa de almacenamiento sigue existiendo en el disco de tu máquina.
+
+Luego, al ejecutar docker rm yape-mongo-local, eliminas el contenedor por completo. Esto incluye:
+
+La configuración del contenedor.
+
+El sistema de archivos interno.
+
+Todos los datos almacenados en /data/db que no estén en un volumen externo.
+
+Si no montaste un volumen persistente al crear el contenedor (con -v o --mount), la pérdida de datos es permanente e irrecuperable. Es como si hubieras formateado el disco donde estaba la base de datos. No hay forma de recuperarlos a menos que hayas hecho un mongodump o exportado los datos previamente.
+
+Si montaste un volumen persistente (ejemplo: docker run -v mongo_data:/data/db ...), los datos no se almacenan en el contenedor efímero sino en un volumen gestionado por Docker que vive independientemente del contenedor. Al hacer docker rm, el volumen mongo_data sigue existiendo en tu sistema (/var/lib/docker/volumes/ en Linux). Para recuperar los datos, simplemente creas un nuevo contenedor montando ese mismo volumen y todos los datos aparecerán nuevamente. Incluso puedes inspeccionar el volumen o hacer backup copiando los archivos directamente.
+En MongoDB Atlas M0 (o cualquier cluster de Atlas), los datos residen en la infraestructura en la nube de MongoDB Inc. (AWS, GCP o Azure). El comando docker stop y docker rm solo afectan al contenedor local que tienes en tu máquina; no tienen absolutamente ningún impacto en Atlas.
+
+Los datos en Atlas:
+
+Están almacenados en discos persistentes gestionados por el proveedor cloud.
+
+Se replican automáticamente entre varios nodos (incluso en M0 hay réplicas, aunque con menor redundancia que clusters pagos).
+
+Siguen disponibles aunque apagues tu computadora, cierres la terminal o elimines cualquier contenedor local.
+
+Incluyen backups automáticos (en clusters pagos) y en M0 al menos hay replicación que protege contra fallos de hardware.
+
+Puedes seguir conectándote desde cualquier aplicación usando la URI de conexión de Atlas, independientemente de lo que ocurra en tu entorno local.
 
 
 ```
